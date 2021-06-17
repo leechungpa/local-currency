@@ -17,15 +17,29 @@ knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = e
 ```{r include = FALSE}
 library(tidyverse)
 library(car)
+library(GGally)
+theme_set(theme_grey(base_family='NanumGothic'))
+
 
 original_data = read_csv('./data/local_currency.csv',locale=locale('ko',encoding='euc-kr'))
 
 
 original_pop = read_csv('./data/gg_population.csv')
         # 2021.02 기준
+```
+
+
+```{r}
+original_pop[2:nrow(original_pop),3:ncol(original_pop)] %>%
+  ggpairs(title="경기도 시군별 인구수 및 세대수") 
+
+covid_before_after = str_remove(original_data$기준년월, "-") %>%
+  as.numeric() >= 202004
 
 data = original_data %>%
-  select(c("시군명", "기준년월", "월별카드발행수량(건)", "월별카드충전액(천원)", "월별카드사용액(천원)"))
+  select(c("시군명", "기준년월", "월별카드발행수량(건)", "월별카드충전액(천원)", "월별카드사용액(천원)")) %>%
+  mutate(covid=if_else(covid_before_after, 'after', 'before'))
+
 
 original_pop %>% colnames()
   # 현재 총 인구 합계로 표준화
@@ -37,8 +51,12 @@ pop = original_pop %>%
 skimr::skim(pop)
 
 
+div_data = data %>%  mutate_at(vars(-시군명, -기준년월, -covid), funs(. / `월별카드발행수량(건)` ))
+
+
+
 # 표준화
-stand_data = data %>% left_join(pop, by='시군명') %>%  mutate_at(vars(-시군명, -기준년월), funs(. / total))
+stand_data = data %>% left_join(pop, by='시군명') %>%  mutate_at(vars(-시군명, -기준년월, -covid), funs(. / total))
 
 
 ```
@@ -54,11 +72,12 @@ skimr::skim(stand_data)
 
 ```{r}
 
-rcbd_card = aov(`월별카드발행수량(건)`~시군명+기준년월, data=data)
+rcbd_card = aov(`월별카드발행수량(건)`~시군명+covid+기준년월, data=data)
 summary(rcbd_card)
-rcbd_card_use = aov(`월별카드사용액(천원)`~시군명+기준년월, data=data)
+rcbd_card_use = aov(`월별카드사용액(천원)`~시군명+covid+기준년월, data=data)
 summary(rcbd_card_use)
-rcbd_card_charge = aov(`월별카드충전액(천원)`~시군명+기준년월, data=data)
+
+rcbd_card_charge = aov(`월별카드충전액(천원)`~시군명+covid+기준년월, data=data)
 summary(rcbd_card_charge)
 
 ```
@@ -121,7 +140,57 @@ qqline(residuals_charge , datax = T)
 ```
 
 
+## div data
 
+```{r}
+
+div_rcbd_card = aov(`월별카드발행수량(건)`~시군명+covid+기준년월, data=div_data)
+summary(div_rcbd_card)
+div_rcbd_card_use = aov(`월별카드사용액(천원)`~시군명+covid+기준년월, data=div_data)
+summary(div_rcbd_card_use)
+div_rcbd_card_charge = aov(`월별카드충전액(천원)`~시군명+covid+기준년월, data=div_data)
+summary(div_rcbd_card_charge)
+
+```
+
+
+## 월별카드사용액(천원)
+
+```{r}
+
+div_residuals_use = resid(div_rcbd_card_use)
+div_fitted_use = fitted(div_rcbd_card_use)
+plot(div_fitted_use, div_residuals_use, pch=20, ylim=c(-1.1,1.1)*max(abs(div_residuals_use)),
+     xlab = 'fitted value', ylab='residual', main='residuals vs fitted values')
+abline(0,0,lty=2)
+
+
+```
+
+```{r}
+qqnorm(div_residuals_use, datax=T, ylab='normal scores',
+       xlab='residual', main='normal probability plot of the residuals')
+qqline(residuals_use, datax = T)
+```
+
+## 월별카드충전액(천원)
+
+```{r}
+div_residuals_charge = resid(div_rcbd_card_charge)
+div_fitted_charge  = fitted(div_rcbd_card_charge)
+plot(div_fitted_charge , div_residuals_charge , pch=20, ylim=c(-1.1,1.1)*max(abs(div_residuals_charge )),
+     xlab = 'fitted value', ylab='residual', main='residuals vs fitted values')
+abline(0,0,lty=2)
+
+
+```
+
+```{r}
+qqnorm(div_residuals_charge , datax=T, ylab='normal scores',
+       xlab='residual', main='normal probability plot of the residuals')
+qqline(div_residuals_charge , datax = T)
+
+```
 
 # RCBD with standard?
 
@@ -133,20 +202,25 @@ leveneTest(`월별카드사용액(천원)`~시군명, data=data)
 leveneTest(`월별카드충전액(천원)`~시군명, data=data)
 
 
+leveneTest(`월별카드발행수량(건)`~시군명, data=div_data)
+leveneTest(`월별카드사용액(천원)`~시군명, data=div_data)
+leveneTest(`월별카드충전액(천원)`~시군명, data=div_data)
+
 leveneTest(`월별카드발행수량(건)`~시군명, data=stand_data)
 leveneTest(`월별카드사용액(천원)`~시군명, data=stand_data)
 leveneTest(`월별카드충전액(천원)`~시군명, data=stand_data)
 ```
 
 
+## stand data
 
 ```{r}
 
-stand_rcbd_card = aov(`월별카드발행수량(건)`~시군명+기준년월, data=data)
+stand_rcbd_card = aov(`월별카드발행수량(건)`~시군명*covid+기준년월, data=data)
 summary(stand_rcbd_card)
-stand_rcbd_card_use = aov(`월별카드사용액(천원)`~시군명+기준년월, data=data)
+stand_rcbd_card_use = aov(`월별카드사용액(천원)`~시군명*covid+기준년월, data=data)
 summary(stand_rcbd_card_use)
-stand_rcbd_card_charge = aov(`월별카드충전액(천원)`~시군명+기준년월, data=data)
+stand_rcbd_card_charge = aov(`월별카드충전액(천원)`~시군명*covid+기준년월, data=data)
 summary(stand_rcbd_card_charge)
 
 ```
@@ -217,10 +291,32 @@ qqline(stand_residuals_charge , datax = T)
 
 
 ```{r}
+coef = stand_rcbd_card$coefficients%>% as.data.frame()
 
-library(agricolae)
-HSD.test(stand_rcbd_card, "시군명", group=TRUE)
+rownames(coef)
+a = tibble(name=rownames(coef)[str_detect(rownames(coef), ':covid')],
+       coef=coef[str_detect(rownames(coef), ':covid'),]) %>%
+  arrange(coef)
 
+
+coef = stand_rcbd_card_use$coefficients %>% as.data.frame()
+
+b = tibble(name=rownames(coef)[str_detect(rownames(coef), ':covid')],
+       coef=coef[str_detect(rownames(coef), ':covid'),]) %>%
+  arrange(coef)
+
+
+
+coef = stand_rcbd_card_charge$coefficients %>% as.data.frame()
+
+c = tibble(name=rownames(coef)[str_detect(rownames(coef), ':covid')],
+       coef=coef[str_detect(rownames(coef), ':covid'),]) %>%
+  arrange(coef)
+
+```
+
+
+```{r}
 tukey_stand_rcbd_card = TukeyHSD(x=stand_rcbd_card, '시군명', conf.level=0.95)
 tukey_stand_rcbd_card_use = TukeyHSD(x=stand_rcbd_card_use, '시군명', conf.level=0.95)
 tukey_stand_rcbd_card_charge = TukeyHSD(x=stand_rcbd_card_charge, '시군명', conf.level=0.95)
@@ -228,14 +324,26 @@ tukey_stand_rcbd_card_charge = TukeyHSD(x=stand_rcbd_card_charge, '시군명', c
 
 plot_tukey = function(tukey, str){
   rowname_vector = rownames(tukey$시군명) 
-  tukey$시군명[str_detect(rowname_vector, str),] %>%
-    print()
-    #plot(las=1, tcl=-.3, col="brown")
+  tukey$시군명 = tukey$시군명[str_detect(rowname_vector, str),]
+  print(tukey$시군명)
+  plot(tukey, las=1, tcl=-.3, col="brown")
 }
 
-#par(mar=c(3,7,3,3))
-#plot_tukey(tukey_stand_rcbd_subway, '금천구')
-#plot_tukey(tukey_stand_rcbd_taxi, '금천구')
+par(family = 'NanumGothic')
+
+par(mar=c(3,7,3,3))
+
+
+plot_tukey(tukey_stand_rcbd_card, '수원')
+plot_tukey(tukey_stand_rcbd_card, '연천')
+
+plot_tukey(tukey_stand_rcbd_card_use, '수원')
+plot_tukey(tukey_stand_rcbd_card_use, '연천')
+plot_tukey(tukey_stand_rcbd_card_use, '성남')
+
+plot_tukey(tukey_stand_rcbd_card_charge, '수원')
+plot_tukey(tukey_stand_rcbd_card_charge, '연천')
+plot_tukey(tukey_stand_rcbd_card_charge, '성남')
 
 ```
 
