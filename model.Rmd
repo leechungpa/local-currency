@@ -1,0 +1,242 @@
+---
+title: "산학협력 빅데이터 분석"
+author: "leechungpa"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    toc: yes
+    toc_float: true
+    highlight: tango
+    number_section: true
+    self_contained: true
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = file.path(dirname(inputFile), './docs/model.html')) })
+---
+
+```{r include = FALSE}
+library(tidyverse)
+library(car)
+
+original_data = read_csv('./data/local_currency.csv',locale=locale('ko',encoding='euc-kr'))
+
+
+original_pop = read_csv('./data/gg_population.csv')
+        # 2021.02 기준
+
+data = original_data %>%
+  select(c("시군명", "기준년월", "월별카드발행수량(건)", "월별카드충전액(천원)", "월별카드사용액(천원)"))
+
+original_pop %>% colnames()
+  # 현재 총 인구 합계로 표준화
+pop = original_pop %>%
+  select(c("시군구별(1)", "세대수(세대)")) %>%
+  rename(시군명=`시군구별(1)`, total=`세대수(세대)`)
+
+
+skimr::skim(pop)
+
+
+# 표준화
+stand_data = data %>% left_join(pop, by='시군명') %>%  mutate_at(vars(-시군명, -기준년월), funs(. / total))
+
+
+```
+
+데이터 개관
+
+```{r}
+skimr::skim(data)
+skimr::skim(stand_data)
+```
+
+# RCBD
+
+```{r}
+
+rcbd_card = aov(`월별카드발행수량(건)`~시군명+기준년월, data=data)
+summary(rcbd_card)
+rcbd_card_use = aov(`월별카드사용액(천원)`~시군명+기준년월, data=data)
+summary(rcbd_card_use)
+rcbd_card_charge = aov(`월별카드충전액(천원)`~시군명+기준년월, data=data)
+summary(rcbd_card_charge)
+
+```
+
+## 월별카드발행수량(건)
+
+```{r}
+
+residuals = resid(rcbd_card)
+fitted = fitted(rcbd_card)
+plot(fitted, residuals, pch=20, ylim=c(-1.1,1.1)*max(abs(residuals)),
+     xlab = 'fitted value', ylab='residual', main='residuals vs fitted values')
+abline(0,0,lty=2)
+
+
+```
+
+```{r}
+qqnorm(residuals, datax=T, ylab='normal scores',
+       xlab='residual', main='normal probability plot of the residuals')
+qqline(residuals, datax = T)
+```
+
+## 월별카드사용액(천원)
+
+```{r}
+
+residuals_use = resid(rcbd_card_use)
+fitted_use = fitted(rcbd_card_use)
+plot(fitted_use, residuals_use, pch=20, ylim=c(-1.1,1.1)*max(abs(residuals_use)),
+     xlab = 'fitted value', ylab='residual', main='residuals vs fitted values')
+abline(0,0,lty=2)
+
+
+```
+
+```{r}
+qqnorm(residuals_use, datax=T, ylab='normal scores',
+       xlab='residual', main='normal probability plot of the residuals')
+qqline(residuals_use, datax = T)
+```
+
+## 월별카드충전액(천원)
+
+```{r}
+residuals_charge = resid(rcbd_card_charge)
+fitted_charge  = fitted(rcbd_card_charge)
+plot(fitted_charge , residuals_charge , pch=20, ylim=c(-1.1,1.1)*max(abs(residuals_charge )),
+     xlab = 'fitted value', ylab='residual', main='residuals vs fitted values')
+abline(0,0,lty=2)
+
+
+```
+
+```{r}
+qqnorm(residuals_charge , datax=T, ylab='normal scores',
+       xlab='residual', main='normal probability plot of the residuals')
+qqline(residuals_charge , datax = T)
+
+```
+
+
+
+
+# RCBD with standard?
+
+
+```{r}
+
+leveneTest(`월별카드발행수량(건)`~시군명, data=data)
+leveneTest(`월별카드사용액(천원)`~시군명, data=data)
+leveneTest(`월별카드충전액(천원)`~시군명, data=data)
+
+
+leveneTest(`월별카드발행수량(건)`~시군명, data=stand_data)
+leveneTest(`월별카드사용액(천원)`~시군명, data=stand_data)
+leveneTest(`월별카드충전액(천원)`~시군명, data=stand_data)
+```
+
+
+
+```{r}
+
+stand_rcbd_card = aov(`월별카드발행수량(건)`~시군명+기준년월, data=data)
+summary(stand_rcbd_card)
+stand_rcbd_card_use = aov(`월별카드사용액(천원)`~시군명+기준년월, data=data)
+summary(stand_rcbd_card_use)
+stand_rcbd_card_charge = aov(`월별카드충전액(천원)`~시군명+기준년월, data=data)
+summary(stand_rcbd_card_charge)
+
+```
+
+## 월별카드발행수량(건)
+
+```{r}
+
+stand_residuals = resid(stand_rcbd_card)
+stand_fitted = fitted(stand_rcbd_card)
+plot(stand_fitted, stand_residuals, pch=20, ylim=c(-1.1,1.1)*max(abs(stand_residuals)),
+     xlab = 'fitted value', ylab='residual', main='residuals vs fitted values')
+abline(0,0,lty=2)
+
+
+```
+
+```{r}
+qqnorm(stand_residuals, datax=T, ylab='normal scores',
+       xlab='residual', main='normal probability plot of the residuals')
+qqline(stand_residuals, datax = T)
+```
+
+## 월별카드사용액(천원)
+
+```{r}
+
+stand_residuals_use = resid(stand_rcbd_card_use)
+stand_fitted_use = fitted(stand_rcbd_card_use)
+plot(stand_fitted_use, stand_residuals_use, pch=20, ylim=c(-1.1,1.1)*max(abs(stand_residuals_use)),
+     xlab = 'fitted value', ylab='residual', main='residuals vs fitted values')
+abline(0,0,lty=2)
+
+
+```
+
+```{r}
+qqnorm(stand_residuals_use, datax=T, ylab='normal scores',
+       xlab='residual', main='normal probability plot of the residuals')
+qqline(stand_residuals_use, datax = T)
+```
+
+## 월별카드충전액(천원)
+
+```{r}
+stand_residuals_charge = resid(stand_rcbd_card_charge)
+stand_fitted_charge  = fitted(stand_rcbd_card_charge)
+plot(stand_fitted_charge , stand_residuals_charge , pch=20, ylim=c(-1.1,1.1)*max(abs(stand_residuals_charge)),
+     xlab = 'fitted value', ylab='residual', main='residuals vs fitted values')
+abline(0,0,lty=2)
+
+
+```
+
+```{r}
+qqnorm(stand_residuals_charge , datax=T, ylab='normal scores',
+       xlab='residual', main='normal probability plot of the residuals')
+qqline(stand_residuals_charge , datax = T)
+
+```
+
+
+
+
+
+
+# Tukey-Kramer Procedure
+
+
+```{r}
+
+library(agricolae)
+HSD.test(stand_rcbd_card, "시군명", group=TRUE)
+
+tukey_stand_rcbd_card = TukeyHSD(x=stand_rcbd_card, '시군명', conf.level=0.95)
+tukey_stand_rcbd_card_use = TukeyHSD(x=stand_rcbd_card_use, '시군명', conf.level=0.95)
+tukey_stand_rcbd_card_charge = TukeyHSD(x=stand_rcbd_card_charge, '시군명', conf.level=0.95)
+
+
+plot_tukey = function(tukey, str){
+  rowname_vector = rownames(tukey$시군명) 
+  tukey$시군명[str_detect(rowname_vector, str),] %>%
+    print()
+    #plot(las=1, tcl=-.3, col="brown")
+}
+
+#par(mar=c(3,7,3,3))
+#plot_tukey(tukey_stand_rcbd_subway, '금천구')
+#plot_tukey(tukey_stand_rcbd_taxi, '금천구')
+
+```
+
+
