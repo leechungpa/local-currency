@@ -216,11 +216,11 @@ leveneTest(`월별카드충전액(천원)`~시군명, data=stand_data)
 
 ```{r}
 
-stand_rcbd_card = aov(`월별카드발행수량(건)`~시군명*covid+기준년월, data=data)
+stand_rcbd_card = aov(`월별카드발행수량(건)`~시군명*covid+기준년월, data=stand_data)
 summary(stand_rcbd_card)
-stand_rcbd_card_use = aov(`월별카드사용액(천원)`~시군명*covid+기준년월, data=data)
+stand_rcbd_card_use = aov(`월별카드사용액(천원)`~시군명*covid+기준년월, data=stand_data)
 summary(stand_rcbd_card_use)
-stand_rcbd_card_charge = aov(`월별카드충전액(천원)`~시군명*covid+기준년월, data=data)
+stand_rcbd_card_charge = aov(`월별카드충전액(천원)`~시군명*covid+기준년월, data=stand_data)
 summary(stand_rcbd_card_charge)
 
 ```
@@ -333,9 +333,12 @@ par(family = 'NanumGothic')
 
 par(mar=c(3,7,3,3))
 
+windows.options(width=400, height=600)
 
 plot_tukey(tukey_stand_rcbd_card, '수원')
 plot_tukey(tukey_stand_rcbd_card, '연천')
+
+par(mfrow=c(1,3))
 
 plot_tukey(tukey_stand_rcbd_card_use, '수원')
 plot_tukey(tukey_stand_rcbd_card_use, '연천')
@@ -347,4 +350,44 @@ plot_tukey(tukey_stand_rcbd_card_charge, '성남')
 
 ```
 
+
+# GMM
+
+```{r}
+library(lme4)
+
+rand_stand_rcbd_card_use = lmer(`월별카드사용액(천원)` ~ 시군명 * covid + (1 | 기준년월), data=stand_data)
+summary(rand_stand_rcbd_card_use)
+
+
+anova(rand_stand_rcbd_card_use)
+
+
+  
+rand_stand_rcbd_card_charge = lmer(`월별카드충전액(천원)` ~ 시군명 * covid + (1 | 기준년월), data=stand_data)
+summary(rand_stand_rcbd_card_charge)
+
+
+anova(rand_stand_rcbd_card_charge)
+```
+
+
+```{r}
+rand_stand_rcbd_card_use
+
+coef = stand_rcbd_card_charge$coefficients %>% as.data.frame()
+
+c = tibble(name=rownames(coef)[str_detect(rownames(coef), ':covid')],
+       coef=coef[str_detect(rownames(coef), ':covid'),]) %>%
+  arrange(coef)
+
+
+
+
+coef = stand_rcbd_card_charge$coefficients %>% as.data.frame()
+
+c = tibble(name=rownames(coef)[str_detect(rownames(coef), ':covid')],
+       coef=coef[str_detect(rownames(coef), ':covid'),]) %>%
+  arrange(coef)
+```
 
